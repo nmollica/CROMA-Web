@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+/tmp/
+capa_cache/
+file_system_backend/
+*.log
+card_draft.*
+click_debug.log

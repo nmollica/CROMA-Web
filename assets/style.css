@@ -1,0 +1,25 @@
+/* Arrow cursor over the image only when draw mode is OFF (no-draw class). */
+.no-draw .nsewdrag,
+.no-draw .drag {
+    cursor: default !important;
+}
+
+.pick-mode .nsewdrag,
+.pick-mode .drag {
+    cursor: crosshair !important;
+}
+
+/* Clickable (completed) stage pills: pointer cursor */
+#stage-nav .nav-link:not(.disabled) {
+    cursor: pointer;
+}
+
+/* Disabled (future) stage pills: not-allowed cursor */
+#stage-nav .nav-link.disabled {
+    cursor: not-allowed;
+}
+
+/* Upload drag-drop region: pointer cursor */
+#upload-image, #upload-image * {
+    cursor: pointer;
+}
