@@ -94,13 +94,16 @@ def register(app):
         Output("seg-pending-rect", "data", allow_duplicate=True),
         Output("seg-drawing", "data", allow_duplicate=True),
         Output("seg-status", "children", allow_duplicate=True),
+        Output("image-view", "figure", allow_duplicate=True),
         Input("btn-redraw-sample", "n_clicks"),
+        EnrichState("state-store", "data"),
         prevent_initial_call=True,
     )
-    def redraw_sample(n):
+    def redraw_sample(n, state):
         if not n:
-            return no_update, no_update, no_update
-        return None, True, "Redraw the rectangle around the fragment."
+            return no_update, no_update, no_update, no_update
+        fig = figures.figure_from_segmentation(state, draw_enabled=True)
+        return None, True, "Redraw the rectangle around the fragment.", fig
 
     @app.callback(
         EnrichOutput("state-store", "data", allow_duplicate=True),

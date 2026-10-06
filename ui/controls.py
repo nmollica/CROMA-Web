@@ -11,7 +11,7 @@ def upload_controls():
         html.H6("1. Load Image"),
         dcc.Upload(
             id="upload-image",
-            children=html.Div(["Drag & drop or ", html.A("select a coral photo")]),
+            children=html.Div([html.A("Upload a coral photo")," or drag & drop"]),
             style={"width": "100%", "height": "80px", "lineHeight": "80px",
                    "borderWidth": "1px", "borderStyle": "dashed",
                    "borderRadius": "6px", "textAlign": "center"},
@@ -147,6 +147,7 @@ def analyze_controls(state=None):
     sub = state.current_subimg()
     has_spl = sub is not None and sub.spl is not None
     n_coral = len(sub.pixel_ids) if (sub and sub.pixel_ids) else 0
+    is_last = (page == n - 1)
 
     return html.Div([
         html.H6("4. Analyze Samples"),
@@ -177,7 +178,10 @@ def analyze_controls(state=None):
 
         html.Hr(),
         dbc.Button("Finalize Analysis →", id="btn-finalize-analyze",
-                   color="success", size="sm", className="w-100"),
+                   size="sm",
+                   className=("w-100 btn btn-success" if is_last
+                              else "w-100 btn btn-secondary"),
+                   disabled=(not is_last)),
     ])
 
 

@@ -32,13 +32,13 @@ def superpixel_polygons(spl):
         mask = (spl == spid)
         if not mask.any():
             continue
-        contours = find_contours(mask.astype(float), 0.5)
+        padded = np.pad(mask.astype(float), 1, mode="constant")
+        contours = find_contours(padded, 0.5)
         if not contours:
             continue
-        # Largest contour (by point count) = outer boundary:
         c = max(contours, key=len)
-        # find_contours returns (row, col) = (y, x); flip to (x, y):
-        polys[spid] = [(pt[1], pt[0]) for pt in c]
+        # subtract 1 to undo the pad, flip (row,col)->(x,y):
+        polys[spid] = [(pt[1] - 1, pt[0] - 1) for pt in c]
     return polys
 
 

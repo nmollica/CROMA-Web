@@ -1,6 +1,6 @@
 """Analysis stage callbacks: superpixels, click-to-label, navigation."""
 
-from dash import Input, Output, State, no_update
+from dash import Input, Output, State, no_update, Patch
 from dash_extensions.enrich import (
     Serverside, Output as EnrichOutput, State as EnrichState,
 )
@@ -59,17 +59,25 @@ def register(app):
             return no_update, no_update, no_update, no_update
         pt = clickData["points"][0]
         spid = pt.get("customdata")
-        if spid is None:
-            return no_update, no_update, no_update, no_update
         if isinstance(spid, list):
             spid = spid[0]
+        if spid is None:
+            return no_update, no_update, no_update, no_update
+        curve = pt["curveNumber"]   # which trace was clicked
+
         state.toggle_coral_superpixel(int(spid))
+        is_coral = int(spid) in set(state.current_subimg().pixel_ids)
+
+        patch = Patch()
+        patch["data"][curve]["fillcolor"] = (
+            "rgba(30,110,255,0.45)" if is_coral else "rgba(0,0,0,0.001)")
+
         sub = state.current_subimg()
-        n_coral = len(sub.pixel_ids) if sub else 0
-        return (Serverside(state), _render_current(state),
+        n_coral = len(sub.pixel_ids)
+        return (Serverside(state), patch,
                 f"Click superpixels to mark coral (click again to unmark). "
                 f"{n_coral} marked.",
-                None)   # reset clickData so the same pixel can be re-clicked
+                None)
 
     @app.callback(
         EnrichOutput("state-store", "data", allow_duplicate=True),

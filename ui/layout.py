@@ -25,16 +25,13 @@ def stage_indicator(current_stage="upload"):
     for i, s in enumerate(order):
         label = STAGE_LABELS.get(s, s.capitalize())
         if i < cur_idx:
-            # completed -> clickable (go back), subdued
             link = dbc.NavLink(label, id=f"nav-{s}",
                                active=False, disabled=False,
                                className="text-success")
         elif i == cur_idx:
-            # current -> highlighted, not clickable
             link = dbc.NavLink(label, id=f"nav-{s}",
                                active=True, disabled=False)
         else:
-            # future -> disabled
             link = dbc.NavLink(label, id=f"nav-{s}",
                                active=False, disabled=True)
         items.append(dbc.NavItem(link))
@@ -49,6 +46,7 @@ def build_layout():
         dcc.Store(id="seg-phase", storage_type="session", data="meta"),
         dcc.Store(id="seg-pending-rect", storage_type="session", data=None),
         dcc.Store(id="seg-drawing", storage_type="session", data=False),
+        dcc.Store(id="last-stage", storage_type="session", data=None),
         dcc.Download(id="download-results"),
 
         html.H3("CoralRAMP Optical Measurement Analyzer", className="my-2"),

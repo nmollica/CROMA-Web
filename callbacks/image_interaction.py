@@ -97,3 +97,21 @@ def register(app):
             return "pick-mode"
         drawing = armed_idx is not None or bool(seg_drawing)
         return "" if drawing else "no-draw"
+
+    @app.callback(
+        Output("armed-swatch", "data", allow_duplicate=True),
+        Output("seg-drawing", "data", allow_duplicate=True),
+        Output("swatch-status", "children", allow_duplicate=True),
+        Output("image-view", "figure", allow_duplicate=True),
+        Input("btn-cancel-swatch", "n_clicks"),
+        EnrichState("state-store", "data"),
+        prevent_initial_call=True,
+    )
+    def cancel_draw(n, state):
+        if not n:
+            return no_update, no_update, no_update, no_update
+        if state is not None and state.stage == "segment":
+            fig = figures.figure_from_segmentation(state, draw_enabled=False)
+        else:
+            fig = figures.figure_from_image(state.img, state, draw_enabled=False)
+        return None, False, "Cancelled.", fig

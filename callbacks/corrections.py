@@ -6,7 +6,7 @@ from dash_extensions.enrich import (
 )
 
 from pipeline import color_correction
-from ui import figures, controls, layout as ui_layout
+from ui import figures, layout as ui_layout
 from callbacks.shared import extract_last_rect
 
 
@@ -31,20 +31,6 @@ def register(app):
         return (idx,
                 f"Swatch #{idx + 1} armed — draw its rectangle. ({n_set}/18 marked)",
                 fig)
-
-    @app.callback(
-        Output("armed-swatch", "data", allow_duplicate=True),
-        Output("swatch-status", "children", allow_duplicate=True),
-        Output("image-view", "figure", allow_duplicate=True),
-        Input("btn-cancel-swatch", "n_clicks"),
-        EnrichState("state-store", "data"),
-        prevent_initial_call=True,
-    )
-    def cancel_swatch(n, state):
-        if not n:
-            return no_update, no_update, no_update
-        fig = figures.figure_from_image(state.img, state, draw_enabled=False)
-        return None, "Swatch selection cancelled.", fig
 
     @app.callback(
         Output("panel-overlay", "style"),

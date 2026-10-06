@@ -1,6 +1,6 @@
 """Central controls-panel dispatcher."""
 
-from dash import Input, Output, no_update
+from dash import Input, Output, no_update, State
 from dash_extensions.enrich import Input as EnrichInput, Output as EnrichOutput, State as EnrichState, Serverside
 
 from ui import controls, layout, figures
@@ -70,3 +70,18 @@ def register(app):
         else:
             fig = figures.figure_from_image(state.img, state)
         return Serverside(state), fig
+
+    @app.callback(
+        Output("swatch-status", "children", allow_duplicate=True),
+        Output("correct-status", "children", allow_duplicate=True),
+        Output("seg-status", "children", allow_duplicate=True),
+        Output("last-stage", "data"),
+        EnrichInput("state-store", "data"),
+        State("last-stage", "data"),
+        prevent_initial_call=True,
+    )
+    def clear_statuses_on_stage_change(state, last_stage):
+        current = getattr(state, "stage", None) if state else None
+        if current != last_stage:
+            return "", "", "", current     # stage changed -> clear all
+        return no_update, no_update, no_update, no_update   # same stage -> leave
