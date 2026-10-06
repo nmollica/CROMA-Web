@@ -46,24 +46,15 @@ def register(app):
         fig = figures.figure_from_image(state.img, state, draw_enabled=False)
         return None, "Swatch selection cancelled.", fig
 
-    app.clientside_callback(
-        """
-        function(armed_idx, seg_drawing) {
-            const visible = (armed_idx !== null && armed_idx !== undefined)
-                            || !!seg_drawing;
-            return {
-                "position": "absolute", "top": 0, "left": 0,
-                "right": 0, "bottom": 0,
-                "backgroundColor": "rgba(20,20,20,0.6)", "zIndex": 1000,
-                "cursor": "not-allowed", "borderRadius": "6px",
-                "display": visible ? "block" : "none"
-            };
-        }
-        """,
+    @app.callback(
         Output("panel-overlay", "style"),
         Input("armed-swatch", "data"),
         Input("seg-drawing", "data"),
+        prevent_initial_call=False,
     )
+    def toggle_overlay(armed_idx, seg_drawing):
+        return ui_layout.overlay_style(
+            armed_idx is not None or bool(seg_drawing))
 
     @app.callback(
         EnrichOutput("state-store", "data", allow_duplicate=True),
