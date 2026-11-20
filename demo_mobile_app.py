@@ -141,10 +141,12 @@ app.layout = dbc.Container(fluid=True, className="px-2", children=[
     # Permanent graph (never recreated -> click binding stays intact).
     # Hidden on the capture screen via the wrapper's style callback.
     html.Div(id="view-wrap", children=[
-        dcc.Graph(id="demo-view", figure=_blank_fig(),
-                  config=GRAPH_CONFIG,
-                  style={"width": "100%",
-                         "aspectRatio": f"{alignment.ALIGNED_W} / {alignment.ALIGNED_H}"}),
+        dcc.Loading(
+            dcc.Graph(id="demo-view", figure=_blank_fig(),
+                    config=GRAPH_CONFIG,
+                    style={"width": "100%",
+                            "aspectRatio": f"{alignment.ALIGNED_W} / {alignment.ALIGNED_H}"}),
+        )
     ]),
 
     # Upload lives permanently too (shown only on capture screen).
@@ -461,7 +463,7 @@ def on_analyze(n, selected_cells, st):
         idx, label, dist = dc.classify_lab(lab)
         results.append({"cell": i, "cat_idx": idx, "label": label,
                         "measured_rgb": dc.median_srgb_tuple(lab),
-                        "pos": f"T{row}C{col}"})
+                        "pos": f"T{row+1}C{col+1}"})
     st["results"] = results
     st["step"] = "results"
     return Serverside(st)
