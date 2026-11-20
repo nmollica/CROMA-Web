@@ -156,6 +156,7 @@ app.layout = dbc.Container(fluid=True, className="px-2", children=[
                 html.Div(id="demo-status", className="text-center mt-2 small"),
             ]),
             html.Div(id="screen-bottom"),
+            html.Div(id="loading-trigger", style={"display": "none"}),
         ]),
     ),
 
@@ -333,6 +334,7 @@ def _auto_swatch_rects():
 @app.callback(
     EnrichOutput("demo-store", "data", allow_duplicate=True),
     Input("demo-align-ok", "n_clicks"),
+    Output("loading-trigger", "children", allow_duplicate=True),
     EnrichState("demo-store", "data"),
     prevent_initial_call=True,
 )
@@ -352,7 +354,7 @@ def on_align_ok(n, st):
     st["corrected"] = color_correction.color_correct(
         aligned, "RBF Interpolation", rects, lot_reference=lot_ref)
     st["step"] = "color"
-    return Serverside(st)
+    return Serverside(st), ""
 
 
 # ---------------------------------------------------------------------------
