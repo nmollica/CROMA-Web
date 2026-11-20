@@ -81,8 +81,9 @@ def _blank_fig():
     return fig
 
 
-def _img_fig(img_u8, overlay_cells=False, selected=None, classified=None):
-    """Image as a non-interactive background; grid cells as clickable polygons."""
+def _img_fig(img_u8, overlay_cells=False, selected=None, classified=None,
+             only_cells=None):
+    """only_cells: if given, draw only these cell indices (for results view)."""
     h, w = img_u8.shape[:2]
     fig = go.Figure()
     fig.add_layout_image(dict(source=Image.fromarray(img_u8),
@@ -93,6 +94,8 @@ def _img_fig(img_u8, overlay_cells=False, selected=None, classified=None):
         cells = geometry.grid_cells()
         badges = dc.category_badge_rgb()
         for i, (row, col, x, y, cw, ch) in enumerate(cells):
+            if only_cells is not None and i not in only_cells:
+                continue                      # skip non-analyzed cells
             px0 = x * alignment.PX_PER_MM
             py0 = y * alignment.PX_PER_MM
             pw = cw * alignment.PX_PER_MM
@@ -291,7 +294,8 @@ def set_figure(st):
     if step == "results" and st["corrected"] is not None:
         classified = {r["cell"]: r["cat_idx"] for r in (st["results"] or [])}
         return _img_fig(st["corrected"], overlay_cells=True,
-                        classified=classified)
+                        classified=classified,
+                        only_cells=set(classified.keys()))
     return _blank_fig()
 
 
