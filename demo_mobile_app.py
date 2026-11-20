@@ -133,6 +133,7 @@ def _big_btn(label, bid, color="primary"):
 app.layout = dbc.Container(fluid=True, className="px-2", children=[
     dcc.Store(id="demo-store", storage_type="memory"),
     dcc.Store(id="demo-session", storage_type="memory"),
+    dcc.Store(id="selected-cells-client", storage_type="memory", data=[]),
     html.H4("CROMA — Coral Health Demo", className="text-center my-3"),
 
     html.Div(id="screen-top", className="text-center"),
@@ -232,9 +233,11 @@ def render_screen(st):
         return (html.P("Colors corrected. Do they look natural?"),
                 _big_btn("✅ Colors Look Good", "demo-color-ok", "success"))
     if step == "cells":
-        n = len(st.get("selected_cells", []))
-        return (html.P(f"Tap each coral to analyze, then Analyze. "
-                       f"({n} selected)"),
+        return (html.Div([
+                    html.P("Tap each coral to analyze, then Analyze."),
+                    html.Div(id="cell-count-text", children="0 selected",
+                             className="fw-bold"),
+                ]),
                 _big_btn("🔬 Analyze Selected", "demo-cells-ok", "success"))
     if step == "results":
         return (html.Div([html.H5("Results", className="text-center"),
@@ -373,26 +376,64 @@ def on_color_ok(n, st):
 # ---------------------------------------------------------------------------
 # Cell selection (tap to toggle) — only updates store; figure setter redraws
 # ---------------------------------------------------------------------------
-@app.callback(
-    EnrichOutput("demo-store", "data", allow_duplicate=True),
+app.clientside_callback(
+    """
+    function(clickData, current) {
+        if (!clickData) {
+            return [window.dash_clientside.no_update,
+                    window.dash_clientside.no_update,
+                    window.dash_clientside.no_update];
+        }
+        const pt = clickData.points[0];
+        let cd = pt.customdata;
+        if (Array.isArray(cd)) cd = cd[0];
+        if (cd === undefined || cd === null) {
+            return [window.dash_clientside.no_update,
+                    window.dash_clientside.no_update,
+                    window.dash_clientside.no_update];
+        }
+        const cell = parseInt(cd);
+
+        // curveNumber identifies which trace was clicked:
+        const curve = pt.curveNumber;
+
+        // Toggle selection set:
+        let sel = current ? current.slice() : [];
+        const pos = sel.indexOf(cell);
+        let selected;
+        if (pos === -1) { sel.push(cell); selected = true; }
+        else { sel.splice(pos, 1); selected = false; }
+
+        // Patch just the tapped trace's fillcolor:
+        const patch = window.dash_clientside.no_update;
+        const newFill = selected ? "rgba(30,110,255,0.45)"
+                                 : "rgba(0,0,0,0.001)";
+        // Use Plotly.restyle directly on the graph for instant update:
+        const gd = document.querySelector("#demo-view .js-plotly-plot");
+        if (gd) {
+            Plotly.restyle(gd, {"fillcolor": newFill}, [curve]);
+        }
+
+        // Update count text + store; figure handled by restyle above.
+        const countText = sel.length + " selected";
+        return [sel, countText, null];
+    }
+    """,
+    Output("selected-cells-client", "data"),
+    Output("cell-count-text", "children"),
     Output("demo-view", "clickData"),
     Input("demo-view", "clickData"),
-    EnrichState("demo-store", "data"),
+    State("selected-cells-client", "data"),
     prevent_initial_call=True,
 )
-def on_cell_click(clickData, st):
-    if not clickData or st is None or st["step"] != "cells":
-        return no_update, no_update
-    cd = clickData["points"][0].get("customdata")
-    if isinstance(cd, list):
-        cd = cd[0]
-    if cd is None:
-        return no_update, no_update
-    st = dict(st)
-    sel = set(st["selected_cells"])
-    sel.symmetric_difference_update({int(cd)})
-    st["selected_cells"] = sorted(sel)
-    return Serverside(st), None
+
+
+app.clientside_callback(
+    "function(n){ return []; }",
+    Output("selected-cells-client", "data", allow_duplicate=True),
+    Input("demo-global-restart", "n_clicks"),
+    prevent_initial_call=True,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -401,17 +442,18 @@ def on_cell_click(clickData, st):
 @app.callback(
     EnrichOutput("demo-store", "data", allow_duplicate=True),
     Input("demo-cells-ok", "n_clicks"),
+    State("selected-cells-client", "data"),
     EnrichState("demo-store", "data"),
     prevent_initial_call=True,
 )
-def on_analyze(n, st):
-    if not n or not st["selected_cells"]:
+def on_analyze(n, selected_cells, st):
+    if not n or not selected_cells:
         return no_update
     st = dict(st)
     cells = geometry.grid_cells()
     corrected = st["corrected"]
     results = []
-    for i in st["selected_cells"]:
+    for i in sorted(selected_cells):
         row, col, x, y, cw, ch = cells[i]
         lab = dc.cell_median_lab(corrected, cells[i])
         if lab is None:
@@ -419,7 +461,7 @@ def on_analyze(n, st):
         idx, label, dist = dc.classify_lab(lab)
         results.append({"cell": i, "cat_idx": idx, "label": label,
                         "measured_rgb": dc.median_srgb_tuple(lab),
-                        "pos": f"T{row+1}C{col+1}"})
+                        "pos": f"T{row}C{col}"})
     st["results"] = results
     st["step"] = "results"
     return Serverside(st)
