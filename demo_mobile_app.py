@@ -134,32 +134,30 @@ app.layout = dbc.Container(fluid=True, className="px-2", children=[
     dcc.Store(id="demo-store", storage_type="memory"),
     dcc.Store(id="demo-session", storage_type="memory"),
     dcc.Store(id="selected-cells-client", storage_type="memory", data=[]),
-    html.H4("CROMA — Coral Health Demo", className="text-center my-3"),
+    html.H4("CROMA Demo", className="text-center my-3"),
 
-    html.Div(id="screen-top", className="text-center"),
-
-    # Permanent graph (never recreated -> click binding stays intact).
-    # Hidden on the capture screen via the wrapper's style callback.
-    html.Div(id="view-wrap", children=[
-        dcc.Loading(
-            dcc.Graph(id="demo-view", figure=_blank_fig(),
-                    config=GRAPH_CONFIG,
-                    style={"width": "100%",
-                            "aspectRatio": f"{alignment.ALIGNED_W} / {alignment.ALIGNED_H}"}),
-        )
-    ]),
-
-    # Upload lives permanently too (shown only on capture screen).
-    html.Div(id="upload-wrap", children=[
-        dcc.Upload(
-            id="demo-upload",
-            children=_big_btn("📷 Take Photo", "demo-capture-btn", "primary"),
-            accept="image/*", multiple=False,
-        ),
-        html.Div(id="demo-status", className="text-center mt-2 small"),
-    ]),
-
-    html.Div(id="screen-bottom"),
+    dcc.Loading(
+        id="scene-loading",
+        type="circle",
+        children=html.Div([
+            html.Div(id="screen-top", className="text-center"),
+            html.Div(id="view-wrap", children=[
+                dcc.Graph(id="demo-view", figure=_blank_fig(),
+                          config=GRAPH_CONFIG,
+                          style={"width": "100%",
+                                 "aspectRatio": f"{alignment.ALIGNED_W} / {alignment.ALIGNED_H}"}),
+            ]),
+            html.Div(id="upload-wrap", children=[
+                dcc.Upload(
+                    id="demo-upload",
+                    children=_big_btn("📷 Take Photo", "demo-capture-btn", "primary"),
+                    accept="image/*", multiple=False,
+                ),
+                html.Div(id="demo-status", className="text-center mt-2 small"),
+            ]),
+            html.Div(id="screen-bottom"),
+        ]),
+    ),
 
     html.Hr(),
     dbc.Button("🔄 Start Over", id="demo-global-restart", color="secondary",
