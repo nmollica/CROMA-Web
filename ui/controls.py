@@ -50,10 +50,13 @@ def correct_controls(state):
 
     return html.Div([
         html.H6("2. Image Correction"),
-        dbc.Button("Flatten (currently disabled)", id="btn-flatten", color="secondary",
-                   size="sm", className="mb-2 w-100"),
+#        dbc.Button("Flatten (currently disabled)", id="btn-flatten", color="secondary",
+#                   size="sm", className="mb-2 w-100"),
+#        html.Hr(),
+        dbc.Button("Align Card (auto-detect swatches)", id="btn-align",
+                   color="primary", size="sm", className="mb-2 w-100"),
         html.Hr(),
-        html.Div("Click a color, then highlight it in the image:",
+        html.Div("To manually pick standards, click a color, then highlight it in the image:",
                  className="small text-muted mb-2"),
         swatch_grid,
         html.Hr(),

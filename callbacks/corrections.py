@@ -5,12 +5,63 @@ from dash_extensions.enrich import (
     Serverside, Output as EnrichOutput, State as EnrichState, Input as EnrichInput,
 )
 
-from pipeline import color_correction
+from pipeline import color_correction, alignment, lots
 from ui import figures, layout as ui_layout
 from callbacks.shared import extract_last_rect
-
+from ui import controls
 
 def register(app):
+
+    @app.callback(
+        EnrichOutput("state-store", "data", allow_duplicate=True),
+        Output("image-view", "figure", allow_duplicate=True),
+        Output("controls-panel", "children", allow_duplicate=True),
+        Output("correct-status", "children", allow_duplicate=True),
+        Input("btn-align", "n_clicks"),
+        EnrichState("state-store", "data"),
+        prevent_initial_call=True,
+    )
+    def align_card(n, state):
+        if not n:
+            return no_update, no_update, no_update, no_update
+        src = state.img_full if state.img_full is not None else state.img0
+        try:
+            aligned, n_tags = alignment.align_image(src)
+            state.img = aligned
+            state.img0 = aligned.copy()
+            state.img_full = None
+            state.aligned = True
+            state.n_tags = n_tags
+            state.rectangles = []
+            state.autopopulate_swatches(alignment.swatch_rects_aligned())
+            state.applied_algo = None
+
+            # --- Read QR -> load lot reference (fallback to default if fails) ---
+            lot_msg = ""
+            try:
+                lot_id = lots.read_qr(aligned)
+                if lot_id:
+                    state.lot_id = lot_id
+                    state.lot_reference = lots.load_lot_reference(lot_id).tolist()
+                    lot_msg = f" Lot '{lot_id}' reference loaded."
+                else:
+                    state.lot_reference = None
+                    lot_msg = " QR not read — using default reference."
+            except lots.LotError as e:
+                state.lot_reference = None
+                lot_msg = f" {e} Using default reference."
+
+            state.save_undo()
+            msg = html.Span(
+                f"Aligned ({n_tags} tags). 18 swatches placed.{lot_msg}",
+                className="text-success")
+            return (Serverside(state),
+                    figures.figure_from_image(state.img, state),
+                    controls.correct_controls(state), msg)
+        except alignment.AlignmentError as e:
+            return (no_update, no_update, no_update,
+                    html.Span(f"Alignment failed: {e}. Mark swatches manually.",
+                              className="text-warning"))
 
     @app.callback(
         Output("armed-swatch", "data"),
@@ -66,7 +117,8 @@ def register(app):
                               className="text-muted"))
         try:
             corrected = color_correction.color_correct(
-                state.img0, algorithm, state.rectangles)
+                state.img0, algorithm, state.rectangles,
+                lot_reference=getattr(state, "lot_reference", None))
         except color_correction.CorrectionError as e:
             return no_update, no_update, html.Span(str(e),
                                                    className="text-warning")

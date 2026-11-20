@@ -8,10 +8,14 @@ Design goals (bleaching-measurement context):
   * No white-clip hack: corals are masked downstream, so we only clip at the
     true gamut boundary and avoid distorting bright near-bleached pixels.
 
+Reference colors:
+  * The per-lot measured reference (loaded from lots/<lot>.csv) is authoritative.
+  * EMPIRICAL_LAB is the fallback default when no lot reference is available.
+
 Algorithms:
   * Cross-Linear   (implemented) : linear model, fit linear-RGB -> linear-RGB
   * Cross-Quadrat  (todo)        : + squared terms
-  * RBF            (todo)        : interpolation in LAB (production algorithm)
+  * RBF            (implemented) : interpolation in LAB (production algorithm)
 """
 
 import numpy as np
@@ -20,7 +24,7 @@ from skimage import color as skcolor
 from scipy.optimize import minimize
 from scipy.spatial.distance import cdist
 
-# Empirically measured LAB reference colors:
+# Empirically measured LAB reference colors (FALLBACK DEFAULT):
 EMPIRICAL_LAB = np.array([
     [93.26, -1.09,  2.19], [71.11, -1.50,  3.56], [59.29, -3.51,  3.12],
     [44.50, -3.60,  3.87], [33.68, -1.92,  0.13], [22.10,  0.23, -1.45],
@@ -46,16 +50,26 @@ MIN_SWATCHES = 6
 # ---------------------------------------------------------------------------
 # Reference-color helpers (for UI + fitting targets)
 # ---------------------------------------------------------------------------
-def reference_rgb_swatches():
+def _resolve_lab_reference(lab_reference=None):
+    """Return an (18,3) LAB array: the given lot reference, or EMPIRICAL_LAB."""
+    if lab_reference is None:
+        return EMPIRICAL_LAB
+    arr = np.asarray(lab_reference, dtype=np.float64)
+    return arr.reshape(-1, 3)
+
+
+def reference_rgb_swatches(lab_reference=None):
     """Return the 18 reference colors as 0-255 sRGB tuples for UI buttons."""
-    rgb = lab2rgb(EMPIRICAL_LAB.reshape(1, -1, 3)).reshape(-1, 3)
+    lab = _resolve_lab_reference(lab_reference)
+    rgb = lab2rgb(lab.reshape(1, -1, 3)).reshape(-1, 3)
     rgb = np.clip(rgb, 0, 1)
     return [tuple(int(round(c * 255)) for c in row) for row in rgb]
 
 
-def reference_linear_rgb():
+def reference_linear_rgb(lab_reference=None):
     """Reference colors as LINEAR-RGB, shape (18, 3), clipped to [0,1]."""
-    srgb = lab2rgb(EMPIRICAL_LAB.reshape(1, -1, 3)).reshape(-1, 3)
+    lab = _resolve_lab_reference(lab_reference)
+    srgb = lab2rgb(lab.reshape(1, -1, 3)).reshape(-1, 3)
     srgb = np.clip(srgb, 0, 1)
     return _srgb_to_linear(srgb)
 
@@ -91,10 +105,12 @@ def _encode_linear_to_uint8(lin: np.ndarray) -> np.ndarray:
     srgb = _linear_to_srgb(np.clip(lin, 0.0, 1.0))
     return np.clip(srgb * 255.0 + 0.5, 0, 255).astype(np.uint8)
 
+
 # LAB normalization ranges:
 _L_MIN, _L_MAX = 0.0, 100.0
 _A_MIN, _A_MAX = -128.0, 127.0
 _B_MIN, _B_MAX = -128.0, 127.0
+
 
 def _normalize_lab(lab: np.ndarray) -> np.ndarray:
     out = np.empty_like(lab, dtype=np.float64)
@@ -115,10 +131,13 @@ def _denormalize_lab(labn: np.ndarray) -> np.ndarray:
 # ---------------------------------------------------------------------------
 # Swatch sampling
 # ---------------------------------------------------------------------------
-def sample_swatches(img_u8: np.ndarray, rectangles: list):
+def sample_swatches(img_u8: np.ndarray, rectangles: list, lab_reference=None):
     """
     For each SET swatch rectangle, compute the MEAN color in LINEAR RGB over
     the rectangle region.
+
+    lab_reference : optional (18,3) LAB array (per-lot measured reference).
+                    If None, falls back to EMPIRICAL_LAB.
 
     Returns
     -------
@@ -127,7 +146,7 @@ def sample_swatches(img_u8: np.ndarray, rectangles: list):
     used_indices    : (N,) int       which reference-color indices were used
     """
     lin = _decode_uint8_to_linear(img_u8)
-    ref_lin = reference_linear_rgb()
+    ref_lin = reference_linear_rgb(lab_reference)
     H, W = lin.shape[:2]
 
     measured, target, used = [], [], []
@@ -158,19 +177,21 @@ class CorrectionError(Exception):
     """Raised when correction cannot be performed (e.g., too few swatches)."""
 
 
-def color_correct(img_u8: np.ndarray, algorithm: str, rectangles: list) -> np.ndarray:
+def color_correct(img_u8: np.ndarray, algorithm: str, rectangles: list,
+                  lot_reference=None) -> np.ndarray:
     """
     Apply color correction. Returns a uint8 sRGB image for display.
-    The MEASUREMENT (linear-RGB) is recoverable from the returned image via
-    _decode_uint8_to_linear, but for coral stats we'll correct+sample within
-    the coral mask later, in linear space.
+
+    lot_reference : optional (18,3) LAB array of per-lot measured reference
+                    colors. If None, EMPIRICAL_LAB is used as the fallback.
 
     Raises CorrectionError if inputs are insufficient.
     """
     if algorithm == "None":
         return img_u8
 
-    measured, target, used = sample_swatches(img_u8, rectangles)
+    measured, target, used = sample_swatches(img_u8, rectangles,
+                                             lab_reference=lot_reference)
     if measured.shape[0] < MIN_SWATCHES:
         raise CorrectionError(
             f"Need at least {MIN_SWATCHES} marked swatches to color-correct "
@@ -198,7 +219,6 @@ def _fit_linear_map(measured: np.ndarray, target: np.ndarray) -> np.ndarray:
     """
     N = measured.shape[0]
     X = np.hstack([measured, np.ones((N, 1))])          # (N, 4)
-    # Solve for each output channel; A is (4, 3), we store transposed as (3,4)
     coeffs, *_ = np.linalg.lstsq(X, target, rcond=None)  # (4, 3)
     return coeffs.T                                       # (3, 4)
 
@@ -213,23 +233,18 @@ def _apply_cross_linear(img_u8, measured, target) -> np.ndarray:
     corrected = corrected.reshape(H, W, 3)
     return _encode_linear_to_uint8(corrected)
 
+
 # ---------------------------------------------------------------------------
 # RBF interpolation:  fit  in LAB space
 # ---------------------------------------------------------------------------
-
 def _rbf_kernel(D: np.ndarray, params) -> np.ndarray:
-    """Gaussian x exponential kernel: exp(-(e1*D)^2) * exp(-e2*D).
-    Matches the MATLAB rbf_kernel = @(D,b) exp(-(b(1)*D).^2).*exp(-b(2)*D)."""
+    """Gaussian x exponential kernel: exp(-(e1*D)^2) * exp(-e2*D)."""
     e1, e2 = params
     return np.exp(-((e1 * D) ** 2)) * np.exp(-e2 * D)
 
 
 def _rbf_loo_error(params, Xn: np.ndarray, ref_n: np.ndarray) -> float:
-    """
-    Leave-one-out cross-validation error for given kernel params.
-    Port of MATLAB EstimateEpsilon: for each swatch, fit on the rest,
-    predict the held-out swatch, sum squared error over all channels.
-    """
+    """Leave-one-out CV error for given kernel params."""
     n = Xn.shape[0]
     total = 0.0
     for s in range(n):
@@ -251,14 +266,7 @@ def _rbf_loo_error(params, Xn: np.ndarray, ref_n: np.ndarray) -> float:
 
 
 def _apply_rbf(img_u8, measured_lin, target_lin) -> np.ndarray:
-    """
-    RBF interpolation color correction, performed in normalized LAB space.
-
-    measured_lin, target_lin : (N,3) linear-RGB swatch means / references
-    (we convert them to LAB here to fit in LAB, matching the MATLAB design).
-    """
-    # Convert swatch measured + reference from linear-RGB -> LAB.
-    # skimage rgb2lab expects sRGB by default; we have LINEAR rgb, so tell it.
+    """RBF interpolation color correction, performed in normalized LAB space."""
     Xlab = rgb2lab(measured_lin.reshape(1, -1, 3),
                    illuminant="D65").reshape(-1, 3)
     reflab = rgb2lab(target_lin.reshape(1, -1, 3),
@@ -267,20 +275,17 @@ def _apply_rbf(img_u8, measured_lin, target_lin) -> np.ndarray:
     Xn = _normalize_lab(Xlab)
     ref_n = _normalize_lab(reflab)
 
-    # Optimize kernel params (e1, e2) via LOO CV, same init as MATLAB [1, 0.01].
     res = minimize(_rbf_loo_error, x0=np.array([1.0, 0.01]),
                    args=(Xn, ref_n), method="Nelder-Mead")
     best = res.x
 
-    # Solve RBF weights on all swatches:
     D = cdist(Xn, Xn, metric="euclidean")
     phi = _rbf_kernel(D, best)
     weights, *_ = np.linalg.lstsq(phi, ref_n, rcond=None)   # (N, 3)
 
-    # Interpolate every pixel:
     lin = _decode_uint8_to_linear(img_u8)                   # (H,W,3) linear rgb
     H, W, _ = lin.shape
-    pix_lab = rgb2lab(lin, illuminant="D65").reshape(-1, 3)  # linear->LAB
+    pix_lab = rgb2lab(lin, illuminant="D65").reshape(-1, 3)
     pix_n = _normalize_lab(pix_lab)
 
     Dpix = cdist(pix_n, Xn, metric="euclidean")             # (HW, N)

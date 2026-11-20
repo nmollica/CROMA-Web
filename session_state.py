@@ -57,7 +57,12 @@ class CromaState:
     filename: str | None = None
     img: np.ndarray | None = None          # current working image (RGB uint8)
     img0: np.ndarray | None = None         # snapshot before color correction
+    img_full: np.ndarray | None = None
     crop_limits: list = field(default_factory=list)
+    aligned: bool = False
+    n_tags: int = 0
+    lot_id: str | None = None                 # lot id read from the card QR
+    lot_reference: list | None = None         # 18x3 LAB per-lot measured ref
 
     # --- correction stage ---
     unwarp_flag: bool = False
@@ -77,6 +82,11 @@ class CromaState:
 
     def n_swatches_set(self) -> int:
         return sum(1 for r in self.rectangles if getattr(r, "is_set", False))
+
+    def autopopulate_swatches(self, rects):
+        """rects: list of (index, x, y, w, h) in current-image pixel coords."""
+        for index, x, y, w, h in rects:
+            self.set_swatch(index, x, y, w, h)
 
     # --- segmentation stage ---
     lines: list = field(default_factory=list)

@@ -22,3 +22,9 @@ def grid_cells():
     """List of (row, col, x, y, w, h) in mm."""
     t = build_template()
     return [(c.row, c.col, c.x, c.y, c.w, c.h) for c in t.cells]
+
+
+def qr_region():
+    """(x, y, size) of the lot QR in mm (template coords)."""
+    t = build_template()
+    return (t.qr_pos[0], t.qr_pos[1], t.qr_size)

@@ -27,15 +27,18 @@ def register(app):
         if contents is None:
             return no_update, no_update, no_update
         _, b64 = contents.split(",", 1)
-        img = image_io.decode_image(base64.b64decode(b64))
-        img = image_io.resize_to_height(img, 1000)
+        full = image_io.decode_image(base64.b64decode(b64))   # full resolution
 
         state = new_state()
         state.filename = filename
-        state.img = img
-        state.img0 = img.copy()
-        state.crop_limits = [1, 1, img.shape[0], img.shape[1]]
+        state.img_full = full                   # keep full-res for alignment
+        # Display/working image: resized for the manual fallback path.
+        disp = image_io.resize_to_height(full, 1000)
+        state.img = disp
+        state.img0 = disp.copy()
+        state.crop_limits = [1, 1, disp.shape[0], disp.shape[1]]
         state.stage = "correct"
         state.save_undo()
-        return (Serverside(state), figures.figure_from_image(img, state),
+        return (Serverside(state),
+                figures.figure_from_image(state.img, state),
                 f"Loaded: {filename}")
