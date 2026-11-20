@@ -185,13 +185,14 @@ def init(existing):
 
 @app.callback(
     EnrichOutput("demo-store", "data", allow_duplicate=True),
+    Output("demo-upload", "contents"),
     Input("demo-global-restart", "n_clicks"),
     prevent_initial_call=True,
 )
 def global_restart(n):
     if not n:
-        return no_update
-    return Serverside(new_demo_state())
+        return no_update, no_update
+    return Serverside(new_demo_state()), None
 
 
 # ---------------------------------------------------------------------------
